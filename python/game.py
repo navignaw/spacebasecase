@@ -52,6 +52,10 @@ class Game:
     # find_move will be called and you must return where to go.
     # You must return a tuple (block index, # rotations, x, y)
     def find_move(self):
+        moves = self.findLegalMove()
+        return self.chooseBestMove(moves)
+
+    def findLegalMove(self):
         moves = []
         N = self.dimension
         for index, block in enumerate(self.blocks):
@@ -63,28 +67,54 @@ class Game:
                     new_block = self.rotate_block(block, rotations)
                     if self.can_place(new_block, Point(x, y)):
                         moves.append((new_block, index, rotations, x, y))
-        return self.chooseBestMove(moves)
+        return moves
+
 
     def chooseBestMove(self, moves):
         if not moves:
             return (0, 0, 0, 0)
         bestScore = 0
+        bestMoves = []
+        tolerance = 3
+        scores = map(self.scoreOfMove, moves)
+        maxScore = max(scores)
+        for i in xrange(len(moves)):
+            if scores[i] + tolerance >= maxScore:
+                bestMoves.append(moves[i])
+        debug(bestMoves)
+        return self.bestSpacialMove(bestMoves)
+
+    def bestSpacialMove(self, moves):
+        assert moves
+        bestSpacialScore = 0
         bestMove = None
-        for new_block, idx, rotations, x, y in moves:
-            cBlock = new_block
-            size = len(cBlock)
-            m = 1
-            # check bonus square
+        for cBlock, idx, rotations, x, y in moves:
+            farthestX = 0
+            farthestY = 0
             for offset in cBlock:
-                px = x + offset.x
-                py = y + offset.y
-                if [px, py] in self.bonus_squares:
-                    m = 3
-            cScore = m * size
-            if bestScore < cScore:
-                bestScore = cScore
+                px = offset.x + x
+                py = offset.y + y
+                if farthestX * farthestY < px * py:
+                    farthestX = x
+                    farthestY = y
+            cScore = farthestX * farthestY
+            if bestSpacialScore <= cScore:
+                bestSpacialScore = cScore
                 bestMove = (idx, rotations, x, y)
         return bestMove
+
+    def scoreOfMove(self, move):
+        cBlock, _, _, x, y = move
+        size = len(cBlock)
+        m = 1
+        # check bonus square
+        for offset in cBlock:
+            px = x + offset.x
+            py = y + offset.y
+            if [px, py] in self.bonus_squares:
+                m = 3
+        cScore = m * size
+        return cScore
 
     # Checks if a block can be placed at the given point
     def can_place(self, block, point):
@@ -147,6 +177,37 @@ class Game:
 
     def is_my_turn(self):
         return self.turn == self.my_number
+
+    def chooseBestMove1(self, moves):
+        debug("woofo!")
+        maxDepth = 1
+        bestScore = 0
+        bestMove = None
+        def bestScoreFn(moves, depth=maxDepth):
+            debug("woofolo!")
+
+            if depth == 0:
+                return 0
+            if not moves:
+                return (0, 0, 0, 0)
+            bestScoreLoc = 0
+            bestMoveLoc = None
+            for new_block, idx, rotations, x, y in moves:
+                cBlock = new_block
+                cScoreLoc = self.scoreOfMove(cBlock, x, y)
+                # make move
+                cScoreLoc += 0 if depth==1 else bestScoreFn(self.findLegalMove(), depth-1)
+                # undo move
+                if bestScoreLoc < cScoreLoc:
+                    bestScoreLoc = cScoreLoc
+            return bestScoreLoc
+
+        for move in moves:
+            cScore = bestScoreFn([move])
+            if cScore > bestScore:
+                bestScore = cScore
+                bestMove = move
+        return bestMove[1:]
 
 def get_state():
     return json.loads(raw_input())
