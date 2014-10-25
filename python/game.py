@@ -62,9 +62,29 @@ class Game:
                 for rotations in range(0, 4):
                     new_block = self.rotate_block(block, rotations)
                     if self.can_place(new_block, Point(x, y)):
-                        return (index, rotations, x, y)
+                        moves.append((new_block, index, rotations, x, y))
+        return self.chooseBestMove(moves)
 
-        return (0, 0, 0, 0)
+    def chooseBestMove(self, moves):
+        if not moves:
+            return (0, 0, 0, 0)
+        bestScore = 0
+        bestMove = None
+        for new_block, idx, rotations, x, y in moves:
+            cBlock = new_block
+            size = len(cBlock)
+            m = 1
+            # check bonus square
+            for offset in cBlock:
+                px = x + offset.x
+                py = y + offset.y
+                if [px, py] in self.bonus_squares:
+                    m = 3
+            cScore = m * size
+            if bestScore < cScore:
+                bestScore = cScore
+                bestMove = (idx, rotations, x, y)
+        return bestMove
 
     # Checks if a block can be placed at the given point
     def can_place(self, block, point):
