@@ -37,34 +37,75 @@ class Point:
     def distance(self, point):
         return abs(point.x - self.x) + abs(point.y - self.y)
 
-class Game:
+class Game (object):
+    all_blocks = []
     blocks = []
     grid = []
     bonus_squares = []
     my_number = -1
     dimension = -1 # Board is assumed to be square
     turn = -1
+    max_depth = 1
 
     def __init__(self, args):
         self.interpret_data(args)
+        
+    def next_player(self, player):
+        return (player + 1)  % 4
 
     # find_move is your place to start. When it's your turn,
     # find_move will be called and you must return where to go.
     # You must return a tuple (block index, # rotations, x, y)
-    def find_move(self):
+    def find_moves(self):
+        moves = self.get_valid_moves()
+        best_move, best_score = self.search(self.grid, moves, self.max_depth, self.my_number)
+        return best_move
+
+    def apply_move(self, board, move):
+        pass
+
+    def search(self, board, moves, depth, player):
+        best_seen = 0
+        best_move = (0,0,0,0)
+        for move in moves:
+            next_board = self.apply_move(board, move)
+            board_val = self.evaluate3(next_board, move, depth, player)
+            if board_val > best_seen:
+                best_seen = board_val
+                best_move = move
+
+        return best_seen, best_move
+
+    def evaluate3(self, board, move, depth, player):
+        if not depth:
+            return self.estimate(board, move, player)
+        currently_playing = player
+        current_board = board
+        for i in xrange(3):
+            currently_playing = self.next_player(currently_playing)
+            his_score, his_move = self.search(current_board, self.get_valid_moves(current_board, currently_playing), depth - 1, currently_playing)
+
+            current_board = self.apply_move(current_board, his_move)
+        my_score, my_move = self.search(current_board, self.get_valid_moves(current_board, player), depth - 1, player)
+        return my_score
+
+
+    def estimate(self, board, move, player):
+        return 0
+
+    def get_valid_moves(self):
         moves = []
         N = self.dimension
         for index, block in enumerate(self.blocks):
             for i in range(0, N * N):
                 x = i / N
                 y = i % N
-
                 for rotations in range(0, 4):
                     new_block = self.rotate_block(block, rotations)
                     if self.can_place(new_block, Point(x, y)):
-                        return (index, rotations, x, y)
+                        moves.append(index, rotations, x, y)
+        return moves
 
-        return (0, 0, 0, 0)
 
     # Checks if a block can be placed at the given point
     def can_place(self, block, point):
@@ -116,6 +157,7 @@ class Game:
             self.dimension = args['board']['dimension']
             self.turn = args['turn']
             self.grid = args['board']['grid']
+            self.allblocks = args['blocks']
             self.blocks = args['blocks'][self.my_number]
             self.bonus_squares = args['board']['bonus_squares']
 
