@@ -37,15 +37,18 @@ class Point:
     def distance(self, point):
         return abs(point.x - self.x) + abs(point.y - self.y)
 
-class Game:
+
+class Game(object):
     blocks = []
     grid = []
     bonus_squares = []
     my_number = -1
     dimension = -1 # Board is assumed to be square
     turn = -1
+    strategy = None
 
-    def __init__(self, args):
+    def __init__(self, args, strategy='spatial'):
+        self.strategy = strategy
         self.interpret_data(args)
 
     # find_move is your place to start. When it's your turn,
@@ -53,55 +56,28 @@ class Game:
     # You must return a tuple (block index, # rotations, x, y)
     def find_move(self):
         moves = self.findLegalMove()
-        return self.chooseBestMove(moves)
+        if not moves:
+            return (0, 0, 0, 0)
+
+        try:
+            module = __import__(self.strategy)
+            return module.chooseBestMove(self, moves)
+        except ImportError:
+            return (0, 0, 0, 0)
 
     def findLegalMove(self):
         moves = []
         N = self.dimension
         for index, block in enumerate(self.blocks):
-            for i in range(0, N * N):
+            for i in xrange(0, N * N):
                 x = i / N
                 y = i % N
 
-                for rotations in range(0, 4):
+                for rotations in xrange(0, 4):
                     new_block = self.rotate_block(block, rotations)
                     if self.can_place(new_block, Point(x, y)):
                         moves.append((new_block, index, rotations, x, y))
         return moves
-
-
-    def chooseBestMove(self, moves):
-        if not moves:
-            return (0, 0, 0, 0)
-        bestScore = 0
-        bestMoves = []
-        tolerance = 3
-        scores = map(self.scoreOfMove, moves)
-        maxScore = max(scores)
-        for i in xrange(len(moves)):
-            if scores[i] + tolerance >= maxScore:
-                bestMoves.append(moves[i])
-        debug(bestMoves)
-        return self.bestSpacialMove(bestMoves)
-
-    def bestSpacialMove(self, moves):
-        assert moves
-        bestSpacialScore = 0
-        bestMove = None
-        for cBlock, idx, rotations, x, y in moves:
-            farthestX = 0
-            farthestY = 0
-            for offset in cBlock:
-                px = offset.x + x
-                py = offset.y + y
-                if farthestX * farthestY < px * py:
-                    farthestX = x
-                    farthestY = y
-            cScore = farthestX * farthestY
-            if bestSpacialScore <= cScore:
-                bestSpacialScore = cScore
-                bestMove = (idx, rotations, x, y)
-        return bestMove
 
     def scoreOfMove(self, move):
         cBlock, _, _, x, y = move
