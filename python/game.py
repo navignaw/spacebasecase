@@ -27,6 +27,9 @@ class Point:
     def __eq__(self, point):
         return self.x == point.x and self.y == point.y
 
+    def __str__(self):
+        return "({0}, {1})".format(self.x,self.y)
+
     # rotates 90deg counterclockwise
     def rotate(self, num_rotations):
         if num_rotations == 1: return Point(-self.y, self.x)
@@ -38,7 +41,7 @@ class Point:
         return abs(point.x - self.x) + abs(point.y - self.y)
     
 # rotates block 90deg counterclockwise
-def rotate_block(self, block, num_rotations):
+def rotate_block(block, num_rotations):
     return [offset.rotate(num_rotations) for offset in block]
 
 class GameState (object):
@@ -49,11 +52,12 @@ class GameState (object):
     turn = -1
     bonus_squares = []
 
-    def __init__(self, grid, dim, blocks, t, p):
+    def __init__(self, grid, dim, blocks, t, bonus, p):
         self.grid = grid
         self.dimension = dim
         self.blocks = blocks
         self.turn = t
+        self.bonus_squares = bonus
         self.player = p
 
     def inc_player(self):
@@ -74,7 +78,7 @@ class GameState (object):
                 for rotations in range(0, 4):
                     new_block = rotate_block(block, rotations)
                     if self.can_place(new_block, Point(x, y)):
-                        moves.append(index, rotations, x, y)
+                        moves.append((index, rotations, x, y))
         return moves
 
     # Checks if a block can be placed at the given point
@@ -114,35 +118,31 @@ class GameState (object):
     def apply_move(self, move, player):
         locs = rotate_block(self.blocks[player][move[0]], move[1])
         center = Point(move[2], move[3])
+        #debug("Checking move at center: " + str(center) + ", offsets: "+ str([str(x) for x in locs]))
         for offset in locs:
             p = center + offset
-            self.state[p.x][p.y] = player
+            self.grid[p.x][p.y] = player
         self.turn += 1
         return self.blocks[player].pop(move[0])
     
     def undo_move(self, move, player, block):
-        self.apply_move(state, move, -1)
+        locs = rotate_block(block, move[1])
+        center = Point(move[2], move[3])
+        for offset in locs:
+            p = center + offset
+            self.grid[p.x][p.y] = -2 if [p.x,p.y] in self.bonus_squares else -1
         self.blocks[player].insert(move[0], block)
         self.turn -= 1
 
     # The move that got you to current state
-    def estimate(move):
+    def estimate(self, move):
         return 0
 
 class Game (object):
-   """ all_blocks = []
-    blocks = []
-    grid = []
-    bonus_squares = []
-    my_number = -1
-    dimension = -1 # Board is assumed to be square
-    turn = -1
-    max_depth = 1
-"""
-
     state = None
     my_number = -1
     turn = -1
+    max_depth = 0
 
     def __init__(self, args):
         self.interpret_data(args)
@@ -153,28 +153,34 @@ class Game (object):
     # find_move is your place to start. When it's your turn,
     # find_move will be called and you must return where to go.
     # You must return a tuple (block index, # rotations, x, y)
-    def find_moves(self):
-        moves = self.get_valid_moves()
-        best_move, best_score = self.search(self.grid, moves, self.max_depth, self.my_number)
+    def find_move(self):
+        if self.state is None:
+            debug("Making default move")
+            return (0,0,0,0)
+        moves = self.state.valid_moves()
+        best_score, best_move = self.search(self.state, moves, self.max_depth)
+        debug("Making a move: {0}".format(best_move))
         return best_move
 
     def search(self, state, moves, depth):
+        #debug("Starting search: " + str(state.player)  + " with depth " +  str(depth)) 
         best_seen = 0
         best_move = (0,0,0,0)
+        my_moves = state.blocks[state.player]
         for move in moves:
             block_played = state.apply_move(move, state.player)
             state.inc_player()
             board_val = self.evaluate3(state, move, depth)
-            if board_val > best_seen:
+            if board_val >= best_seen:
                 best_seen = board_val
                 best_move = move
             state.dec_player()
             state.undo_move(move, state.player, block_played)
-            state.dec_player()
 
         return best_seen, best_move
 
     def evaluate3(self, state, move, depth):
+        #debug("Starting evaluate3: {0} with depth {1}".format(state.player, depth))
         if not depth:
             return state.estimate(move)
         blocks_played = []
@@ -198,8 +204,8 @@ class Game (object):
 
     # updates local variables with state from the server
     def interpret_data(self, args):
-        if (('move' not in args) or (args['move'] != 1)):
-            return
+        if 'turn' in args:
+            debug("Turn: {0}".format(args['turn']))
             
         if 'error' in args:
             debug('Error: ' + args['error'])
@@ -214,14 +220,14 @@ class Game (object):
             grid = args['board']['grid']
             allblocks = args['blocks']
             bonus_squares = args['board']['bonus_squares']
+            for blocks in allblocks:
+                for index, block in enumerate(blocks):
+                    blocks[index] = [Point(offset) for offset in block]
 
-        for blocks in allblocks:
-            for index, block in enumerate(blocks):
-                blocks[index] = [Point(offset) for offset in block]
+            self.state = GameState(grid, dimension, allblocks, turn, bonus_squares, self.my_number)
 
-        self.state = GameState(grid, dimension, allblocks, turn, bonus_squares, self.my_number)
-
-        send_command(" ".join(str(x) for x in self.find_move()))
+        if (('move' in args) and (args['move'] == 1)):
+            send_command(" ".join(str(x) for x in self.find_move()))
 
     def is_my_turn(self):
         return self.turn == self.my_number
