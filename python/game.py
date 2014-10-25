@@ -45,9 +45,8 @@ class Game(object):
     my_number = -1
     dimension = -1 # Board is assumed to be square
     turn = -1
-    strategy = None
 
-    def __init__(self, args, strategy='spatial'):
+    def __init__(self, args, strategy='default'):
         self.strategy = strategy
         self.interpret_data(args)
 
@@ -195,13 +194,15 @@ def send_command(message):
 def debug(message):
     send_command('DEBUG ' + str(message))
 
-def main():
+def main(args):
     setup = get_state()
-    game = Game(setup)
+    strategy = args[0] if args else 'default'
+    game = Game(setup, strategy=strategy)
+    debug("Running game with strategy %s" % strategy)
 
     while True:
         state = get_state()
         game.interpret_data(state)
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

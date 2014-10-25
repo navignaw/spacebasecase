@@ -13,10 +13,11 @@ FAST=0
 
 trap "pkill -P $$" SIGTERM SIGKILL EXIT
 
-while getopts "ft:" option;
+while getopts "fs:t:" option;
 do
     case $option in
         f) FAST=1 ;;
+        s) RUN_AI="$RUN_AI $OPTARG" ;;
         t) TEAM_ID=$OPTARG ;;
     esac
 done
